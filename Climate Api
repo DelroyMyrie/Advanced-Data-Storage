@@ -1,0 +1,112 @@
+#import dependencies 
+
+import datetime as dt
+import numpy as np
+import pandas as pd
+import datetime as dt
+import sqlalchemy
+from sqlalchemy.ext.automap import automap_base
+from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, func
+from flask import Flask, jsonify
+
+#Database Setup
+engine = create_engine("sqlite:///Hawaii.sqlite")
+# reflect the database into a new model
+Base = automap_base()
+# reflect the tables
+Base.prepare(engine, reflect=True)
+
+# Save reference to the table
+Station = Base.classes.station
+Measurements = Base.classes.measurements
+
+# Create our session (link) from Python to the DB
+session = Session(engine)
+
+# Flask Setup
+app = Flask(__name__)
+
+# Flask Routes
+@app.route("/")
+def welcome():
+ """List all available api routes."""
+    return (
+        f"Available Routes:<br/>"
+        f"/api/v1.0/precipitation<br/>"
+        f"/api/v1.0/stations<br/>"
+        f"/api/v1.0/tobs<br/>"
+        f"/api/v1.0/start<br/>"
+        f"/api/v1.0/start/end<br/>"
+
+    )
+
+@app.route("/api/v1.0/precipitation")
+def precipitation():
+ """Return a list of precipitation data of last 12 months"""
+    last_date = session.query(Measurement.date).order_by(Measurement.date.desc()).first()
+    last_year = dt.date(2017, 8, 23) - dt.timedelta(days=365)
+    rain = session.query(Measurement.date, Measurement.prcp).\
+        filter(Measurement.date > last_year).\
+        order_by(Measurement.date).all()
+
+# Create a list of dicts with `date` and `prcp` as the keys and values
+    rain_totals = []
+    for rain in results:
+        row = {}
+        row["date"] = rain[0]
+        row["prcp"] = rain[1]
+        rain_totals.append(row)
+
+    return jsonify(rain_totals)
+
+@app.route("/api/v1.0/stations")
+def stations():
+    stations_query = session.query(Station.name, Station.station)
+    stations = pd.read_sql(stations_query.statement, stations_query.session.bind)
+    return jsonify(stations.to_dict())
+
+@app.route("/api/v1.0/tobs")
+def tobs():
+last_date = session.query(Measurement.date).order_by(Measurement.date.desc()).first()
+last_year = dt.date(2017, 8, 23) - dt.timedelta(days=365)
+temperature = session.query(Measurement.station, Measurement.date, Measurement.tobs).\
+    filter(Measurement.station == busiest).\
+    filter(Measurement.date > last_year).\
+    order_by(Measurement.date).all(
+
+# Create a list of dicts with `date` and `tobs` as the keys and values
+    temperature_totals = []
+    for result in temperature:
+        row = {}
+        row["date"] = temperature[0]
+        row["tobs"] = temperature[1]
+        temperature_totals.append(row)
+
+    return jsonify(temperature_totals)
+
+@app.route("/api/v1.0/<start>")
+def temp(start):
+start_date= dt.datetime.strptime(start, '%Y-%m-%d')
+    last_year = dt.timedelta(days=365)
+    start = start_date-last_year
+    end =  dt.date(2017, 8, 23)
+    temp_data = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
+        filter(Measurement.date >= start_date).filter(Measurement.date <= end_date).all()
+    temp = list(np.ravel(temp_data))
+    return jsonify(temp)
+
+@app.route("/api/v1.0/<start>/<end>")
+def temp2(start,end):
+start_date= dt.datetime.strptime(start, '%Y-%m-%d')
+    end_date= dt.datetime.strptime(end,'%Y-%m-%d')
+    last_year = dt.timedelta(days=365)
+    start = start_date-last_year
+    end = end_date-last_year
+    temp_data = session.query(func.min(Measurement.tobs), func.avg(Measurement.tobs), func.max(Measurement.tobs)).\
+        filter(Measurement.date >= start_date).filter(Measurement.date <= end_date).all()
+    temp = list(np.ravel(temp_data))
+    return jsonify(temp)
+
+if __name__ == "__main__":
+    app.run(debug=True)
